@@ -45,7 +45,7 @@ mod nodes {
 
     // This is Pretty Bad:tm: because one can create a NodeId using another instance of Nodes,
     // but at least some type system protection is better than none.
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     pub struct Nodes {
         nodes: Box<[Node]>,
     }
@@ -333,11 +333,11 @@ impl DirectBackend {
 impl JITBackend for DirectBackend {
     fn inspect(&mut self, pos: BlockPos) {
         let Some(node_id) = self.pos_map.get(&pos) else {
-            debug!("could not find node at pos {}", pos);
+            println!("could not find node at pos {}", pos);
             return;
         };
 
-        debug!("Node {:?}: {:#?}", node_id, self.nodes[*node_id]);
+        // println!("Node {:?}: {:#?}", node_id, self.nodes[*node_id]);
     }
 
     fn reset(&mut self, plot: &mut PlotWorld, io_only: bool) {
@@ -365,19 +365,22 @@ impl JITBackend for DirectBackend {
     }
 
     fn on_use_block(&mut self, _plot: &mut PlotWorld, pos: BlockPos) {
+        // println!("pos_map: {:#?}\nnodes: {:#?}\nblocks: {:#?}", &self.pos_map, &self.nodes, &self.blocks);
         let node_id = self.pos_map[&pos];
         let node = &self.nodes[node_id];
+        // println!("we did on use block: {:?}", node);
         match node.ty {
             NodeType::Button => {
                 let powered = !node.powered;
                 self.schedule_tick(node_id, 10, TickPriority::Normal);
-                self.set_node(node_id, powered, bool_to_ss(powered));
-            }
+                self.set_node(node_id, powered, bool_to_ss(powered));            }
             NodeType::Lever => {
                 self.set_node(node_id, !node.powered, bool_to_ss(!node.powered));
             }
             _ => warn!("Tried to use a {:?} redpiler node", node.ty),
         }
+
+        // println!("pos_map: {:#?}\nnodes: {:#?}\nblocks: {:#?}", &self.pos_map, &self.nodes, &self.blocks);
     }
 
     fn set_pressure_plate(&mut self, _plot: &mut PlotWorld, pos: BlockPos, powered: bool) {
@@ -458,6 +461,8 @@ impl JITBackend for DirectBackend {
         }
 
         self.scheduler.end_tick(queues);
+        println!("{:#?}", self.nodes);
+        // println!("{}", self);
     }
 
     fn compile(&mut self, graph: CompileGraph, ticks: Vec<TickEntry>) {
@@ -683,9 +688,9 @@ impl fmt::Display for DirectBackend {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("digraph{")?;
         for (id, node) in self.nodes.inner().iter().enumerate() {
-            if matches!(node.ty, NodeType::Wire) {
-                continue;
-            }
+            // if matches!(node.ty, NodeType::Wire) {
+            //     continue;
+            // }
             let label = match node.ty {
                 NodeType::Constant => format!("Constant: {}", node.output_power),
                 _ => format!("{:?}", node.ty)

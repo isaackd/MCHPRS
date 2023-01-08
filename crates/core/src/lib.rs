@@ -4,16 +4,10 @@
 #[macro_use]
 mod utils;
 pub mod blocks;
-mod chat;
-mod config;
-mod items;
-mod permissions;
-mod player;
 pub mod plot;
-mod profile;
 pub mod redpiler;
-pub mod server;
 pub mod world;
+pub mod items;
 
 #[macro_use]
 extern crate bitflags;

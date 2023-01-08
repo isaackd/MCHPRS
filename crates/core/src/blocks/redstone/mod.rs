@@ -182,7 +182,7 @@ impl Default for RedstoneRepeater {
 }
 
 impl RedstoneRepeater {
-    pub(super) fn new(
+    pub fn new(
         delay: u8,
         facing: BlockDirection,
         locked: bool,
@@ -565,7 +565,7 @@ pub struct Lever {
 }
 
 impl Lever {
-    pub(super) fn new(face: LeverFace, facing: BlockDirection, powered: bool) -> Lever {
+    pub fn new(face: LeverFace, facing: BlockDirection, powered: bool) -> Lever {
         Lever {
             face,
             facing,

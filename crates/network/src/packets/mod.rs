@@ -1,13 +1,10 @@
 pub mod clientbound;
-pub mod serverbound;
 
-use super::NetworkState;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use flate2::bufread::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use serde::Serialize;
-use serverbound::*;
 use std::io::{self, Cursor, Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -56,82 +53,6 @@ impl From<std::string::FromUtf8Error> for PacketDecodeError {
 
 #[derive(Debug)]
 pub enum PacketEncodeError {}
-
-fn read_compressed<T: PacketDecoderExt>(
-    reader: &mut T,
-    network_state: &mut NetworkState,
-) -> DecodeResult<Box<dyn ServerBoundPacket>> {
-    let decompressed_length = reader.read_varint()? as usize;
-    let data = PacketDecoderExt::read_to_end(reader)?;
-    // `data` is not compressed if `decompressed_length` is 0
-    if decompressed_length == 0 {
-        read_decompressed(&mut Cursor::new(data), network_state)
-    } else {
-        let mut decompresser = ZlibDecoder::new(data.as_slice());
-        let mut decompressed_data = Vec::with_capacity(decompressed_length);
-        decompresser.read_to_end(&mut decompressed_data)?;
-        read_decompressed(&mut Cursor::new(decompressed_data), network_state)
-    }
-}
-
-fn read_decompressed<T: PacketDecoderExt>(
-    reader: &mut T,
-    state: &mut NetworkState,
-) -> DecodeResult<Box<dyn ServerBoundPacket>> {
-    let packet_id = reader.read_varint()?;
-    Ok(match *state {
-        NetworkState::Handshake if packet_id == 0x00 => {
-            let handshake = SHandshake::decode(reader)?;
-            match handshake.next_state {
-                1 => *state = NetworkState::Status,
-                2 => *state = NetworkState::Login,
-                _ => {}
-            }
-            Box::new(handshake)
-        }
-        NetworkState::Status if packet_id == 0x00 => Box::new(SRequest::decode(reader)?),
-        NetworkState::Status if packet_id == 0x01 => Box::new(SPing::decode(reader)?),
-        NetworkState::Login if packet_id == 0x00 => {
-            *state = NetworkState::Play;
-            Box::new(SLoginStart::decode(reader)?)
-        }
-        _ => match packet_id {
-            0x03 => Box::new(SChatMessage::decode(reader)?),
-            0x05 => Box::new(SClientSettings::decode(reader)?),
-            0x06 => Box::new(STabComplete::decode(reader)?),
-            0x0A => Box::new(SPluginMessage::decode(reader)?),
-            0x0F => Box::new(SKeepAlive::decode(reader)?),
-            0x11 => Box::new(SPlayerPosition::decode(reader)?),
-            0x12 => Box::new(SPlayerPositionAndRotation::decode(reader)?),
-            0x13 => Box::new(SPlayerRotation::decode(reader)?),
-            0x14 => Box::new(SPlayerMovement::decode(reader)?),
-            0x19 => Box::new(SPlayerAbilities::decode(reader)?),
-            0x1A => Box::new(SPlayerDigging::decode(reader)?),
-            0x1B => Box::new(SEntityAction::decode(reader)?),
-            0x25 => Box::new(SHeldItemChange::decode(reader)?),
-            0x28 => Box::new(SCreativeInventoryAction::decode(reader)?),
-            0x2B => Box::new(SUpdateSign::decode(reader)?),
-            0x2C => Box::new(SAnimation::decode(reader)?),
-            0x2E => Box::new(SPlayerBlockPlacemnt::decode(reader)?),
-            _ => Box::new(SUnknown),
-        },
-    })
-}
-
-pub fn read_packet<T: PacketDecoderExt>(
-    reader: &mut T,
-    compressed: &Arc<AtomicBool>,
-    network_state: &mut NetworkState,
-) -> DecodeResult<Box<dyn ServerBoundPacket>> {
-    let length = reader.read_varint()?;
-    let data = reader.read_bytes(length as usize)?;
-    let mut cursor = Cursor::new(data);
-    if compressed.load(Ordering::Relaxed) {
-        read_compressed(&mut cursor, network_state)
-    } else {
-        read_decompressed(&mut cursor, network_state)
-    }
-}
 
 impl<T: std::convert::AsRef<[u8]>> PacketDecoderExt for Cursor<T> {}
 impl PacketDecoderExt for TcpStream {}
